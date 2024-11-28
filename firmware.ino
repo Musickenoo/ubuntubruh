@@ -57,6 +57,7 @@ rcl_publisher_t ultra_publisher;
 rcl_subscription_t twist_subscriber;
 rcl_publisher_t motor1_pid_publisher;
 rcl_publisher_t motor2_pid_publisher;
+rcl_publisher_t position_publisher;
 
 nav_msgs__msg__Odometry odom_msg;
 sensor_msgs__msg__Imu imu_msg;
@@ -66,6 +67,7 @@ std_msgs__msg__Float32 ultra_msg;
 
 std_msgs__msg__Float32 motor1_pid_msg;
 std_msgs__msg__Float32 motor2_pid_msg;
+geometry_msgs__msg__Vector3 position_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -187,13 +189,13 @@ void loop() {
     }
 }
 
-void controlCallback(rcl_timer_t * timer, int64_t last_call_time) 
-{
+void controlCallback(rcl_timer_t * timer, int64_t last_call_time) {
+
     RCLC_UNUSED(last_call_time);
-    if (timer != NULL) 
-    {  
+    if (timer != NULL) {  
        moveBase();
        publishData();
+       publishPosition(); // เพิ่มฟังก์ชันนี้เพื่อเผยแพร่ตำแหน่ง
     }
 }
 
@@ -278,6 +280,13 @@ bool createEntities()
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
         "ultrasonic_distance"
     ));
+
+    RCCHECK(rclc_publisher_init_default(
+        &position_publisher, 
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Vector3),
+        "odomrobot"
+    ));
     
 
     // synchronize time with the agent
@@ -300,6 +309,7 @@ bool destroyEntities()
     rcl_timer_fini(&control_timer);
     rclc_executor_fini(&executor);
     rclc_support_fini(&support);
+    rcl_publisher_fini(&position_publisher, &node);
 
     digitalWrite(LED_PIN, HIGH);
     
@@ -393,6 +403,15 @@ void ultrasonicPub() {
     ultra_msg.data = float(Ultrasonic); // เก็บระยะลงใน message
     rcl_publish(&ultra_publisher, &ultra_msg, NULL); // ส่ง message ผ่าน publisher
 }
+
+void publishPosition() {
+    position_msg.x = odom_msg.pose.pose.position.x;
+    position_msg.y = odom_msg.pose.pose.position.y;
+    position_msg.z = odom_msg.pose.pose.position.z; // ปกติเป็น 0 สำหรับ 2D Robot
+
+    rcl_publish(&position_publisher, &position_msg, NULL);
+}
+
 
 void publishData()
 {
